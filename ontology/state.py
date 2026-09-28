@@ -2,7 +2,7 @@
 
 This module provides the state representation and validation layer for decisions:
 
-1. DecisionState: Immutable snapshots of decision context.
+1. DecisionState: Deeply immutable snapshots of decision context.
 2. StateTransition: Proposed changes from one state to another.
 3. ConstraintChecker: Validates transitions against domain rules.
 
@@ -13,18 +13,43 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
+
+
+class FrozenValues(dict[str, Any]):
+    """Dictionary-compatible immutable mapping used by decision states.
+
+    Rejects all mutation operations to prevent late-stage state corruption.
+    """
+
+    def __init__(self, values: Mapping[str, Any] = ()) -> None:
+        super().__init__(values)
+
+    def _immutable(self, *args: Any, **kwargs: Any) -> None:
+        raise AttributeError("decision state values are immutable")
+
+    __setitem__ = _immutable
+    __delitem__ = _immutable
+    clear = _immutable
+    pop = _immutable
+    popitem = _immutable
+    setdefault = _immutable
+    update = _immutable
 
 
 @dataclass(frozen=True)
 class DecisionState:
-    """Immutable state snapshot used by the decision pipeline.
+    """Deeply immutable state snapshot used by the decision pipeline.
 
-    Represents a point-in-time view of decision context, including:
+    Represents a point-in-time view of decision context:
     - domain: The application area (e.g., "public_safety", "child_welfare")
     - state_id: Unique identifier for this state
-    - values: Arbitrary key-value context data
+    - values: Immutable key-value context data (FrozenValues mapping)
     - timestamp: When this state was created
+
+    Both attribute reassignment and nested dictionary mutation are rejected,
+    ensuring that historical state cannot be corrupted after entry into the
+    audit and decision pipeline.
 
     Example:
         >>> state = DecisionState("s1", "public_safety", {"threat": 0.8})
@@ -37,11 +62,16 @@ class DecisionState:
 
     state_id: str
     domain: str
-    values: dict[str, Any] = field(default_factory=dict)
+    values: Mapping[str, Any] = field(default_factory=FrozenValues)
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
+    def __post_init__(self) -> None:
+        """Convert values to FrozenValues if necessary."""
+        if not isinstance(self.values, FrozenValues):
+            object.__setattr__(self, "values", FrozenValues(self.values))
+
     def with_values(self, **updates: Any) -> DecisionState:
-        """Create a new state with updated values.
+        """Create a new state with updated values; leave this state unchanged.
 
         Timestamp remains the same; supply a new timestamp separately if needed.
         """
@@ -99,7 +129,7 @@ class ConstraintChecker:
         constraints: dict[str, Callable[[StateTransition], bool]] | None = None,
     ) -> None:
         """Initialize with optional constraint predicates."""
-        self.constraints = constraints or {}
+        self.constraints = dict(constraints or {})
 
     def add(
         self,

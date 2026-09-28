@@ -2,7 +2,7 @@
 
 Tests validate:
 - Determinism: identical inputs produce identical outputs
-- Immutability: state objects cannot be modified
+- Deep immutability: state objects cannot be modified
 - Constraint satisfaction: validators work correctly
 - Auditability: memory preserves complete history
 """
@@ -12,7 +12,7 @@ import pytest
 from ontology.core import PrimeEncoder, RotationalOperator
 from ontology.memory import MemoryCorrelation, MemoryRecord, PairedTemporalMemory
 from ontology.projection import ProtectionProjector, RiskAnalyzer, RiskResult
-from ontology.state import ConstraintChecker, DecisionState, StateTransition
+from ontology.state import ConstraintChecker, DecisionState, FrozenValues, StateTransition
 
 
 class TestPrimeEncoder:
@@ -126,19 +126,33 @@ class TestPairedTemporalMemory:
 class TestDecisionState:
     """Tests for DecisionState."""
 
-    def test_state_is_immutable(self) -> None:
-        """DecisionState is frozen; mutations raise error."""
+    def test_state_attribute_assignment_is_immutable(self) -> None:
+        """DecisionState is frozen; attribute reassignment raises error."""
         state = DecisionState("s1", "test")
         with pytest.raises(AttributeError):
-            state.values["key"] = "value"  # type: ignore
+            state.values = {"key": "value"}  # type: ignore[misc]
+
+    def test_state_values_dict_mutation_is_immutable(self) -> None:
+        """State values (FrozenValues) reject all mutations."""
+        state = DecisionState("s1", "test", {"a": 1})
+        with pytest.raises(AttributeError):
+            state.values["b"] = 2  # type: ignore[index]
+        with pytest.raises(AttributeError):
+            state.values.clear()  # type: ignore[union-attr]
 
     def test_with_values_creates_new_state(self) -> None:
         """with_values() returns new state; original unchanged."""
         s1 = DecisionState("s1", "test", {"a": 1})
         s2 = s1.with_values(b=2)
-        assert s1.values == {"a": 1}
-        assert s2.values == {"a": 1, "b": 2}
+        assert dict(s1.values) == {"a": 1}
+        assert dict(s2.values) == {"a": 1, "b": 2}
         assert s1 is not s2
+
+    def test_frozen_values_construction(self) -> None:
+        """FrozenValues can be constructed and read like a dict."""
+        fv = FrozenValues({"x": 1, "y": 2})
+        assert fv["x"] == 1
+        assert dict(fv) == {"x": 1, "y": 2}
 
 
 class TestStateTransition:
@@ -240,5 +254,10 @@ class TestProtectionProjector:
     def test_action_for_level_helper(self) -> None:
         """action_for_level() provides quick action lookup."""
         assert ProtectionProjector.action_for_level("low") == "monitor"
-        assert ProtectionProjector.action_for_level("medium") == "targeted_intervention"
-        assert ProtectionProjector.action_for_level("high") == "immediate_protection"
+        assert (
+            ProtectionProjector.action_for_level("medium")
+            == "targeted_intervention"
+        )
+        assert (
+            ProtectionProjector.action_for_level("high") == "immediate_protection"
+        )
