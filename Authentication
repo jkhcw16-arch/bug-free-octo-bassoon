@@ -1,0 +1,7 @@
+Authentication
+No authentication is required for local development.
+Production deployments should use:
+OAuth2
+API keys
+mTLS
+Agency‑specific identity providers
