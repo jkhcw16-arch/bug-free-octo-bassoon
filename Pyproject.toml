@@ -1,0 +1,7 @@
+[project]
+name = "rpo"
+version = "0.1.0"
+description = "Rotational Prime Ontology reference implementation"
+requires-python = ">=3.10"
+
+[project.dependencies]
