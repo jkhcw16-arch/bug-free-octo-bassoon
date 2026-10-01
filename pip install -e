@@ -1,0 +1,18 @@
+rpo/
+  __init__.py
+  prime_table.py
+  encoding.py
+  rotation.py
+  projection.py
+  intensity.py
+  memory.py
+  optimization.py
+  engine.py
+tests/
+  test_structural.py
+  test_rotational.py
+  test_projection.py
+  test_memory.py
+  test_optimization.py
+  test_engine.py
+pyproject.toml
